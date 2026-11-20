@@ -1,0 +1,54 @@
+name: Happy Shapes Baby daily
+
+# Renders the next sensory episode on GitHub's servers and uploads it to YouTube scheduled for
+# 06:00 Lisbon on the next free day (YouTube publishes it, so it goes out even if GitHub runs late).
+# Keeps up to 7 days scheduled ahead. Three triggers a day after the API quota renews (~08:00 UTC):
+# extra runs only grow the buffer or retry; the scripts never schedule two episodes on one day.
+on:
+  schedule:
+    - cron: "30 10 * * *"
+    - cron: "30 14 * * *"
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+    inputs:
+      max_renders:
+        description: "Episodes to render in this run"
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: happy-shapes-baby-daily
+  cancel-in-progress: false
+
+jobs:
+  schedule-episodes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: System libraries (cairo)
+        run: sudo apt-get update -q && sudo apt-get install -y -q libcairo2-dev pkg-config
+      - run: pip install -r requirements.txt
+      - name: Secret (encrypted repository secret)
+        env:
+          BABY_TOKEN_JSON: ${{ secrets.BABY_TOKEN_JSON }}
+        run: printf '%s' "$BABY_TOKEN_JSON" > token_baby.json
+      - name: Render and schedule episodes
+        env:
+          PYTHONIOENCODING: utf-8
+          TZ: Europe/Lisbon
+        run: python daily.py --max-renders "${{ github.event.inputs.max_renders || '1' }}"
+      - name: Save the schedule record in the repository
+        if: always()
+        run: |
+          rm -f token_baby.json
+          git config user.name "happy-shapes-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/*/metadata.json output/*/uploaded.json
+          git diff --cached --quiet || (git commit -m "Schedule $(date -u +%F)" && git pull --rebase -q && git push)

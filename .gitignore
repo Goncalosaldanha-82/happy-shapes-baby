@@ -1,0 +1,10 @@
+# secrets: never commit or share
+client_secret*.json
+token*.json
+# generated: only metadata.json and uploaded.json of each episode are kept (the schedule record)
+output/**/*.mp4
+output/**/*.wav
+output/**/*.png
+output/preview_*/
+daily.log
+__pycache__/
